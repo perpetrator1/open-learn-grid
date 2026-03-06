@@ -12,7 +12,9 @@ def health_check(request):
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health/", health_check, name="health_check"),
-    path("api/", include("accounts.urls")),
+    path("", include("accounts.urls")),
+    path("", include("academic.urls")),
+    path("", include("materials.urls")),
 ]
 
 # Serve media files in development
