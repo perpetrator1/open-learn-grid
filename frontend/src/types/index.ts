@@ -519,3 +519,129 @@ export interface DashboardActivity {
   results: ActivityItem[];
   count: number;
 }
+
+// ============================================================
+// Federation types
+// ============================================================
+
+export type TrustLevel = "trusted" | "neutral" | "blocked";
+export type ActivityType =
+  | "material_shared"
+  | "material_updated"
+  | "material_removed"
+  | "user_reported"
+  | "instance_announcement"
+  | "instance_stats_update";
+export type ActivityStatus = "received" | "processing" | "processed" | "failed";
+export type BlockType = "manual" | "auto_spam_detection" | "reported";
+
+export interface FederatedInstance {
+  id: number;
+  domain: string;
+  name: string;
+  description: string;
+  logo: string | null;
+  software_version: string;
+  admin_email: string;
+  public_key: string;
+  public_key_fingerprint: string;
+  trust_level: TrustLevel;
+  is_home: boolean;
+  registration_open: boolean;
+  requires_approval: boolean;
+  material_count: number;
+  user_count: number;
+  last_synced_stats_at: string | null;
+  is_active: boolean;
+  is_reachable: boolean;
+  added_by_username: string;
+  added_at: string;
+  last_seen_at: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface FederatedActivity {
+  id: number;
+  from_instance: number;
+  from_instance_domain: string;
+  to_instance: number | null;
+  to_instance_domain: string;
+  activity_id: string;
+  activity_type: ActivityType;
+  payload: Record<string, unknown>;
+  signature: string;
+  status: ActivityStatus;
+  error_message: string;
+  retry_count: number;
+  created_at: string;
+  processed_at: string | null;
+}
+
+export interface FederatedMaterial {
+  id: number;
+  original_id: string;
+  source_instance: number;
+  source_instance_domain: string;
+  source_instance_name: string;
+  source_instance_logo: string | null;
+  title: string;
+  description: string;
+  material_type: string;
+  subject_name: string;
+  semester_number: number | null;
+  department_name: string;
+  file_url: string;
+  external_url: string;
+  tags: string[];
+  uploaded_by_username: string;
+  verified_by_username: string;
+  verification_status: string;
+  view_count: number;
+  download_count: number;
+  original_created_at: string | null;
+  synced_at: string;
+  last_updated_at: string;
+  is_removed: boolean;
+}
+
+export interface InstanceBlock {
+  id: number;
+  instance: number;
+  instance_domain: string;
+  instance_name: string;
+  blocked_by: number | null;
+  blocked_by_username: string;
+  reason: string;
+  block_type: BlockType;
+  created_at: string;
+}
+
+export interface InstanceDiscoveryInfo {
+  domain: string;
+  name: string;
+  description: string;
+  software_version: string;
+  public_key: string;
+  registration_open: boolean;
+  requires_approval: boolean;
+  admin_email: string;
+  material_count: number;
+  user_count: number;
+  supported_activity_types: string[];
+}
+
+export interface FederationMetrics {
+  activities_received_24h: number;
+  activities_failed: number;
+  blocked_instances: number;
+  trusted_instances: number;
+  total_federated_materials: number;
+}
+
+export interface InstanceHealth {
+  status: string;
+  version: string;
+  total_materials: number;
+  total_users: number;
+  is_accepting_activities: boolean;
+}

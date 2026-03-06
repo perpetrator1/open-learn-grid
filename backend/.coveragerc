@@ -1,0 +1,19 @@
+[run]
+source = .
+omit =
+    */migrations/*
+    */tests/*
+    */test_*.py
+    venv/*
+    .venv/*
+    manage.py
+    config/asgi.py
+    config/wsgi.py
+
+[report]
+show_missing = true
+skip_covered = false
+fail_under = 80
+
+[html]
+directory = htmlcov

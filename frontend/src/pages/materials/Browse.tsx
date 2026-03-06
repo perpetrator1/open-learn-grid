@@ -5,7 +5,7 @@
 import { useState } from "react"
 import { useSearchParams, Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
-import { Search, Grid2X2, List, SlidersHorizontal, X, Filter } from "lucide-react"
+import { Search, Grid2X2, List, SlidersHorizontal, X, Filter, ExternalLink, Globe } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,8 +22,9 @@ import {
 } from "@/components/ui/select"
 import { materialsApi } from "@/lib/materials-api"
 import { academicApi } from "@/lib/academic-api"
+import { federationApi } from "@/lib/federation-api"
 import { cn } from "@/lib/utils"
-import type { Material, MaterialFilters } from "@/types"
+import type { Material, MaterialFilters, FederatedMaterial, MaterialType, Department } from "@/types"
 
 // ─── Material card ─────────────────────────────────────────────────────────────
 
@@ -127,6 +128,75 @@ function MaterialCard({
   )
 }
 
+// ─── Federated material card ──────────────────────────────────────────────────
+
+function FederatedMaterialCard({
+  material,
+  layout,
+}: {
+  material: FederatedMaterial
+  layout: "grid" | "list"
+}) {
+  const instanceBadge = (
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-normal">
+      <Globe className="h-3 w-3" />
+      {material.source_instance_domain}
+    </span>
+  )
+
+  if (layout === "list") {
+    return (
+      <a href={material.external_url || material.file_url} target="_blank" rel="noreferrer" className="block group">
+        <div className="rounded-lg border p-4 hover:bg-muted/40 transition-colors flex items-start gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium group-hover:text-primary transition-colors truncate">
+                {material.title}
+              </span>
+              <Badge variant="outline" className="text-xs shrink-0">
+                {material.material_type}
+              </Badge>
+              <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">
+              {material.subject_name} · {material.description || "No description"}
+            </p>
+          </div>
+          <div className="text-xs text-muted-foreground shrink-0 text-right">
+            {instanceBadge}
+          </div>
+        </div>
+      </a>
+    )
+  }
+
+  return (
+    <a href={material.external_url || material.file_url} target="_blank" rel="noreferrer" className="block group relative">
+      <Card className="h-full hover:shadow-md transition-shadow">
+        <div className="absolute top-2 right-2">{instanceBadge}</div>
+        <CardHeader className="pb-2 pr-28">
+          <span className="font-semibold line-clamp-2 group-hover:text-primary transition-colors">
+            {material.title}
+          </span>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm text-muted-foreground line-clamp-2">
+            {material.description || "No description available."}
+          </p>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{material.subject_name}</span>
+            <Badge variant="outline" className="text-xs">{material.material_type}</Badge>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-primary pt-1">
+            <ExternalLink className="h-3 w-3" />
+            <span>View on source instance</span>
+          </div>
+        </CardContent>
+      </Card>
+    </a>
+  )
+}
+
 // ─── Sidebar filter section ────────────────────────────────────────────────────
 
 function FilterSection({
@@ -150,6 +220,8 @@ export default function BrowsePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [layout, setLayout] = useState<"grid" | "list">("grid")
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<"local" | "federated">("local")
+  const [fedInstanceFilter, setFedInstanceFilter] = useState<string>("all")
 
   // ── Derive filter state from URL params ────────────────────────────────────
   const rawFilters: MaterialFilters = {
@@ -201,6 +273,24 @@ export default function BrowsePage() {
   const { data, isLoading } = useQuery({
     queryKey: ["materials", rawFilters],
     queryFn: () => materialsApi.getMaterials(rawFilters),
+    enabled: activeTab === "local",
+  })
+
+  const { data: fedData, isLoading: fedLoading } = useQuery({
+    queryKey: ["federated-materials", rawFilters.search, rawFilters.page, fedInstanceFilter],
+    queryFn: () =>
+      federationApi.listMaterials({
+        search: rawFilters.search,
+        page: rawFilters.page,
+        source_instance: fedInstanceFilter !== "all" ? Number(fedInstanceFilter) : undefined,
+      }),
+    enabled: activeTab === "federated",
+  })
+
+  const { data: instancesData } = useQuery({
+    queryKey: ["federation-instances"],
+    queryFn: () => federationApi.listInstances(),
+    enabled: activeTab === "federated",
   })
 
   const { data: typesData } = useQuery({
@@ -213,12 +303,17 @@ export default function BrowsePage() {
     queryFn: () => academicApi.getDepartments({ is_active: true, page_size: 100 }),
   })
 
-  const materials = data?.results ?? []
+  const materials: Material[] = data?.results ?? []
   const total = data?.count ?? 0
-  const materialTypes = typesData?.results ?? []
-  const departments = deptsData?.results ?? []
+  const materialTypes: MaterialType[] = typesData?.results ?? []
+  const departments: Department[] = deptsData?.results ?? []
   const totalPages = Math.ceil(total / 20)
   const currentPage = rawFilters.page ?? 1
+
+  const federatedMaterials: FederatedMaterial[] = fedData?.results ?? []
+  const fedTotal = fedData?.count ?? 0
+  const fedTotalPages = Math.ceil(fedTotal / 20)
+  const federationInstances = instancesData?.results ?? []
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
   const sidebar = (
@@ -309,6 +404,27 @@ export default function BrowsePage() {
           </SelectContent>
         </Select>
       </FilterSection>
+
+      {activeTab === "federated" && federationInstances.length > 0 && (
+        <>
+          <Separator />
+          <FilterSection title="Source Instance">
+            <Select value={fedInstanceFilter} onValueChange={setFedInstanceFilter}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="All instances" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All instances</SelectItem>
+                {federationInstances.map((inst) => (
+                  <SelectItem key={inst.id} value={String(inst.id)}>
+                    {inst.domain}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterSection>
+        </>
+      )}
     </aside>
   )
 
@@ -320,6 +436,31 @@ export default function BrowsePage() {
         <Link to="/materials/upload">
           <Button size="sm">Upload</Button>
         </Link>
+      </div>
+
+      {/* Network scope toggle */}
+      <div className="inline-flex rounded-lg border overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setActiveTab("local")}
+          className={cn(
+            "px-4 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
+            activeTab === "local" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          This Instance
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("federated")}
+          className={cn(
+            "px-4 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
+            activeTab === "federated" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Globe className="h-3.5 w-3.5" />
+          Federated Network
+        </button>
       </div>
 
       {/* Search + sort toolbar */}
@@ -405,75 +546,79 @@ export default function BrowsePage() {
 
         <div className="flex-1 min-w-0 space-y-4">
           {/* Result count */}
-          {!isLoading && (
+          {activeTab === "local" && !isLoading && (
             <p className="text-sm text-muted-foreground">
               {total} material{total !== 1 ? "s" : ""} found
             </p>
           )}
+          {activeTab === "federated" && !fedLoading && (
+            <p className="text-sm text-muted-foreground">
+              {fedTotal} federated material{fedTotal !== 1 ? "s" : ""} found across the network
+            </p>
+          )}
 
           {/* Grid / list */}
-          {isLoading ? (
-            <div
-              className={cn(
-                layout === "grid"
-                  ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-                  : "space-y-2"
-              )}
-            >
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-36 w-full rounded-xl" />
-              ))}
-            </div>
-          ) : materials.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground">
-              <SlidersHorizontal className="mx-auto w-8 h-8 mb-3 opacity-40" />
-              <p>No materials match your filters.</p>
-              {activeFilterCount > 0 && (
-                <Button
-                  variant="link"
-                  className="mt-2"
-                  onClick={clearAll}
-                >
-                  Clear filters
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div
-              className={cn(
-                layout === "grid"
-                  ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-                  : "space-y-2"
-              )}
-            >
-              {materials.map((m) => (
-                <MaterialCard key={m.id} material={m} layout={layout} />
-              ))}
+          {activeTab === "local" && (
+            isLoading ? (
+              <div className={cn(layout === "grid" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "space-y-2")}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-36 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : materials.length === 0 ? (
+              <div className="text-center py-20 text-muted-foreground">
+                <SlidersHorizontal className="mx-auto w-8 h-8 mb-3 opacity-40" />
+                <p>No materials match your filters.</p>
+                {activeFilterCount > 0 && (
+                  <Button variant="link" className="mt-2" onClick={clearAll}>Clear filters</Button>
+                )}
+              </div>
+            ) : (
+              <div className={cn(layout === "grid" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "space-y-2")}>
+                {materials.map((m) => (
+                  <MaterialCard key={m.id} material={m} layout={layout} />
+                ))}
+              </div>
+            )
+          )}
+
+          {activeTab === "federated" && (
+            fedLoading ? (
+              <div className={cn(layout === "grid" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "space-y-2")}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-36 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : federatedMaterials.length === 0 ? (
+              <div className="text-center py-20 text-muted-foreground">
+                <Globe className="mx-auto w-8 h-8 mb-3 opacity-40" />
+                <p>No federated materials found.</p>
+                <p className="text-xs mt-1">Add trusted instances in the Federation admin to see their materials here.</p>
+              </div>
+            ) : (
+              <div className={cn(layout === "grid" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "space-y-2")}>
+                {federatedMaterials.map((m) => (
+                  <FederatedMaterialCard key={`${m.source_instance}-${m.original_id}`} material={m} layout={layout} />
+                ))}
+              </div>
+            )
+          )}
+
+          {/* Pagination — local */}
+          {activeTab === "local" && totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setFilter("page", String(currentPage - 1))}>Previous</Button>
+              <span className="text-sm text-muted-foreground">{currentPage} / {totalPages}</span>
+              <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setFilter("page", String(currentPage + 1))}>Next</Button>
             </div>
           )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
+          {/* Pagination — federated */}
+          {activeTab === "federated" && fedTotalPages > 1 && (
             <div className="flex items-center justify-center gap-2 pt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage <= 1}
-                onClick={() => setFilter("page", String(currentPage - 1))}
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                {currentPage} / {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage >= totalPages}
-                onClick={() => setFilter("page", String(currentPage + 1))}
-              >
-                Next
-              </Button>
+              <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setFilter("page", String(currentPage - 1))}>Previous</Button>
+              <span className="text-sm text-muted-foreground">{currentPage} / {fedTotalPages}</span>
+              <Button variant="outline" size="sm" disabled={currentPage >= fedTotalPages} onClick={() => setFilter("page", String(currentPage + 1))}>Next</Button>
             </div>
           )}
         </div>

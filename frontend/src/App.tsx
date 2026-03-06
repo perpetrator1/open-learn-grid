@@ -1,37 +1,40 @@
+import { lazy, Suspense } from "react"
 import { NavLink, Route, Routes } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 import { cn } from "@/lib/utils"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { useAuth } from "@/hooks/useAuth"
-import { USER_PERMISSIONS, ACADEMIC_PERMISSIONS, MATERIAL_PERMISSIONS } from "@/lib/permissions"
+import { USER_PERMISSIONS, ACADEMIC_PERMISSIONS, MATERIAL_PERMISSIONS, FEDERATION_PERMISSIONS } from "@/lib/permissions"
 import { MODERATION_PERMISSIONS } from "@/lib/permissions"
-
-// Pages
-import About from "@/pages/About"
-import Home from "@/pages/Home"
-import NotFound from "@/pages/NotFound"
-import LoginPage from "@/pages/auth/Login"
-import RegisterPage from "@/pages/auth/Register"
-import VerifyEmailPage from "@/pages/auth/VerifyEmail"
-import ForgotPasswordPage from "@/pages/auth/ForgotPassword"
-import ResetPasswordPage from "@/pages/auth/ResetPassword"
-import ProfileSettingsPage from "@/pages/settings/Profile"
-import SecuritySettingsPage from "@/pages/settings/Security"
-import AdminRolesPage from "@/pages/admin/Roles"
-import AcademicAdminPage from "@/pages/admin/Academic"
-import AuditLogPage from "@/pages/admin/AuditLog"
-import BrowsePage from "@/pages/materials/Browse"
-import UploadPage from "@/pages/materials/Upload"
-import DetailPage from "@/pages/materials/Detail"
-import NotificationsPage from "@/pages/notifications/Index"
-import NotificationPreferencesPage from "@/pages/notifications/Preferences"
-import VerificationQueuePage from "@/pages/verification/Queue"
-import ModerationPage from "@/pages/moderation/Index"
-import StudentDashboard from "@/pages/dashboard/Student"
-import TeacherDashboard from "@/pages/dashboard/Teacher"
-import AdminDashboard from "@/pages/dashboard/Admin"
 import { NotificationBell } from "@/components/notifications/NotificationBell"
+
+// Pages — loaded lazily so each route becomes its own JS chunk
+const About = lazy(() => import("@/pages/About"))
+const Home = lazy(() => import("@/pages/Home"))
+const NotFound = lazy(() => import("@/pages/NotFound"))
+const LoginPage = lazy(() => import("@/pages/auth/Login"))
+const RegisterPage = lazy(() => import("@/pages/auth/Register"))
+const VerifyEmailPage = lazy(() => import("@/pages/auth/VerifyEmail"))
+const ForgotPasswordPage = lazy(() => import("@/pages/auth/ForgotPassword"))
+const ResetPasswordPage = lazy(() => import("@/pages/auth/ResetPassword"))
+const ProfileSettingsPage = lazy(() => import("@/pages/settings/Profile"))
+const SecuritySettingsPage = lazy(() => import("@/pages/settings/Security"))
+const AdminRolesPage = lazy(() => import("@/pages/admin/Roles"))
+const AcademicAdminPage = lazy(() => import("@/pages/admin/Academic"))
+const AuditLogPage = lazy(() => import("@/pages/admin/AuditLog"))
+const BrowsePage = lazy(() => import("@/pages/materials/Browse"))
+const UploadPage = lazy(() => import("@/pages/materials/Upload"))
+const DetailPage = lazy(() => import("@/pages/materials/Detail"))
+const NotificationsPage = lazy(() => import("@/pages/notifications/Index"))
+const NotificationPreferencesPage = lazy(() => import("@/pages/notifications/Preferences"))
+const VerificationQueuePage = lazy(() => import("@/pages/verification/Queue"))
+const ModerationPage = lazy(() => import("@/pages/moderation/Index"))
+const StudentDashboard = lazy(() => import("@/pages/dashboard/Student"))
+const TeacherDashboard = lazy(() => import("@/pages/dashboard/Teacher"))
+const AdminDashboard = lazy(() => import("@/pages/dashboard/Admin"))
+const FederationAdminPage = lazy(() => import("@/pages/admin/Federation"))
+const SetupWizard = lazy(() => import("@/pages/setup/Wizard"))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -90,6 +93,11 @@ function AppNav() {
                   Queue
                 </NavLink>
               )}
+              {can(FEDERATION_PERMISSIONS.MANAGE_INSTANCES) && (
+                <NavLink to="/admin/federation" className={navLinkClass}>
+                  Federation
+                </NavLink>
+              )}              
               <NotificationBell />
               <NavLink to="/settings/profile" className={navLinkClass}>
                 {user?.display_name || user?.username}
@@ -203,6 +211,13 @@ function AppRoutes() {
         path="/admin/audit-log"
         element={<ProtectedRoute permission={USER_PERMISSIONS.VIEW_AUDIT_LOG}><AuditLogPage /></ProtectedRoute>}
       />
+      <Route
+        path="/admin/federation"
+        element={<ProtectedRoute permission={FEDERATION_PERMISSIONS.MANAGE_INSTANCES}><FederationAdminPage /></ProtectedRoute>}
+      />
+
+      {/* Setup wizard — public */}
+      <Route path="/setup" element={<SetupWizard />} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>
@@ -215,7 +230,15 @@ function App() {
       <div className="min-h-screen bg-background text-foreground">
         <AppNav />
         <main className="container py-10">
-          <AppRoutes />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-64">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
+              </div>
+            }
+          >
+            <AppRoutes />
+          </Suspense>
         </main>
       </div>
     </QueryClientProvider>
