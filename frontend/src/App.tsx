@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { useAuth } from "@/hooks/useAuth"
-import { USER_PERMISSIONS } from "@/lib/permissions"
+import { USER_PERMISSIONS, ACADEMIC_PERMISSIONS } from "@/lib/permissions"
 
 // Pages
 import About from "@/pages/About"
@@ -18,6 +18,10 @@ import ResetPasswordPage from "@/pages/auth/ResetPassword"
 import ProfileSettingsPage from "@/pages/settings/Profile"
 import SecuritySettingsPage from "@/pages/settings/Security"
 import AdminRolesPage from "@/pages/admin/Roles"
+import AcademicAdminPage from "@/pages/admin/Academic"
+import BrowsePage from "@/pages/materials/Browse"
+import UploadPage from "@/pages/materials/Upload"
+import DetailPage from "@/pages/materials/Detail"
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +57,14 @@ function AppNav() {
               Roles
             </NavLink>
           )}
+          {isAuthenticated && can(ACADEMIC_PERMISSIONS.MANAGE_CURRICULUM) && (
+            <NavLink to="/admin/academic" className={navLinkClass}>
+              Academic
+            </NavLink>
+          )}
+          <NavLink to="/materials" className={navLinkClass}>
+            Materials
+          </NavLink>
           {isAuthenticated ? (
             <>
               <NavLink to="/settings/profile" className={navLinkClass}>
@@ -115,6 +127,31 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
+      {/* Protected — academic management */}
+      <Route
+        path="/admin/academic"
+        element={
+          <ProtectedRoute permission={ACADEMIC_PERMISSIONS.MANAGE_CURRICULUM}>
+            <AcademicAdminPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Materials — public browse + detail */}
+      <Route path="/materials" element={<BrowsePage />} />
+
+      {/* Materials — protected upload (before :id so static wins) */}
+      <Route
+        path="/materials/upload"
+        element={
+          <ProtectedRoute>
+            <UploadPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="/materials/:id" element={<DetailPage />} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>
