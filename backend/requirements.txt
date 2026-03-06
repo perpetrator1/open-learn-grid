@@ -13,3 +13,7 @@ redis
 pyotp
 qrcode[pil]
 gunicorn
+channels[daphne]
+channels-redis
+daphne
+django-celery-beat

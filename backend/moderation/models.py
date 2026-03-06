@@ -1,284 +1,137 @@
-"""
-Models for the moderation app.
-
-Handles reports, bans, and appeals.
-"""
-
+"""Moderation app models: Report, Ban, Appeal."""
 from django.db import models
-from django.utils.translation import gettext_lazy as _
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes.fields import GenericForeignKey
+from django.utils import timezone
 from accounts.models import User
-import uuid
 
 
 class Report(models.Model):
-    """
-    User reports for moderation.
-    """
-    
-    class ReportStatus(models.TextChoices):
-        PENDING = 'pending', _('Pending Review')
-        UNDER_REVIEW = 'under_review', _('Under Review')
-        RESOLVED = 'resolved', _('Resolved')
-        DISMISSED = 'dismissed', _('Dismissed')
-        ESCALATED = 'escalated', _('Escalated')
-    
-    class ReportReason(models.TextChoices):
-        HARASSMENT = 'harassment', _('Harassment')
-        HATE_SPEECH = 'hate_speech', _('Hate Speech')
-        MISINFORMATION = 'misinformation', _('Misinformation')
-        SPAM = 'spam', _('Spam')
-        INAPPROPRIATE_CONTENT = 'inappropriate', _('Inappropriate Content')
-        COPYRIGHT = 'copyright', _('Copyright Violation')
-        ACADEMIC_INTEGRITY = 'academic_integrity', _('Academic Integrity Violation')
-        OTHER = 'other', _('Other')
-    
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-    )
-    
+    class ItemType(models.TextChoices):
+        MATERIAL = "material", "Material"
+        USER = "user", "User"
+        INSTANCE = "instance", "Instance"
+
+    class Reason(models.TextChoices):
+        INAPPROPRIATE = "inappropriate_content", "Inappropriate Content"
+        COPYRIGHT = "copyright_violation", "Copyright Violation"
+        SPAM = "spam", "Spam"
+        HARASSMENT = "harassment", "Harassment"
+        INCORRECT = "incorrect_info", "Incorrect Information"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        UNDER_REVIEW = "under_review", "Under Review"
+        RESOLVED = "resolved", "Resolved"
+        DISMISSED = "dismissed", "Dismissed"
+
     reporter = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='reports_submitted',
-        help_text=_('User who submitted the report')
+        User, on_delete=models.SET_NULL, null=True, related_name="submitted_reports"
     )
-    
-    reason = models.CharField(
-        max_length=50,
-        choices=ReportReason.choices,
-        help_text=_('Reason for the report')
+    reported_item_type = models.CharField(max_length=20, choices=ItemType.choices)
+    material = models.ForeignKey(
+        "materials.Material", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reports",
     )
-    
-    description = models.TextField(
-        help_text=_('Detailed description of the issue')
+    reported_user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reports_against",
     )
-    
-    content_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        help_text=_('Type of content being reported')
+    reason = models.CharField(max_length=30, choices=Reason.choices)
+    description = models.TextField()
+    evidence_urls = models.JSONField(default=list, blank=True)
+    context = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    assigned_to = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="assigned_reports",
     )
-    
-    object_id = models.UUIDField(
-        null=True,
-        blank=True,
-        help_text=_('ID of the content being reported')
+    action_taken = models.TextField(blank=True)
+    resolved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="resolved_reports",
     )
-    
-    content_object = GenericForeignKey('content_type', 'object_id')
-    
-    status = models.CharField(
-        max_length=20,
-        choices=ReportStatus.choices,
-        default=ReportStatus.PENDING,
-        help_text=_('Current status of the report')
-    )
-    
-    evidence = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text=_('Evidence supporting the report')
-    )
-    
+    resolved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['status']),
-            models.Index(fields=['reason']),
-            models.Index(fields=['reporter']),
+            models.Index(fields=["status"]),
+            models.Index(fields=["reported_item_type"]),
         ]
-    
+
     def __str__(self):
-        return f"Report {self.id[:8]} - {self.get_reason_display()}"
+        return f"Report #{self.pk} – {self.get_reason_display()} ({self.status})"
 
 
 class Ban(models.Model):
-    """
-    User bans and sanctions.
-    """
-    
-    class BanType(models.TextChoices):
-        TEMPORARY = 'temporary', _('Temporary Ban')
-        PERMANENT = 'permanent', _('Permanent Ban')
-        CONTENT_RESTRICTION = 'content_restriction', _('Content Restriction')
-        FEATURE_RESTRICTION = 'feature_restriction', _('Feature Restriction')
-    
-    class BanStatus(models.TextChoices):
-        ACTIVE = 'active', _('Active')
-        EXPIRED = 'expired', _('Expired')
-        LIFTED = 'lifted', _('Lifted')
-        PENDING = 'pending', _('Pending')
-    
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-    )
-    
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='bans',
-        help_text=_('Banned user')
-    )
-    
-    ban_type = models.CharField(
-        max_length=50,
-        choices=BanType.choices,
-        help_text=_('Type of ban')
-    )
-    
-    reason = models.TextField(
-        help_text=_('Reason for the ban')
-    )
-    
+    class Scope(models.TextChoices):
+        INSTANCE_WIDE = "instance_wide", "Instance-wide"
+        DEPARTMENT_LEVEL = "department_level", "Department-level"
+        SUBJECT_LEVEL = "subject_level", "Subject-level"
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="bans")
     banned_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='bans_issued',
-        help_text=_('Moderator who issued the ban')
+        User, on_delete=models.SET_NULL, null=True, related_name="bans_issued"
     )
-    
-    related_report = models.ForeignKey(
-        Report,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='resulting_bans',
-        help_text=_('Report that led to this ban')
+    scope = models.CharField(max_length=20, choices=Scope.choices, default=Scope.INSTANCE_WIDE)
+    department = models.ForeignKey(
+        "academic.Department", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="bans",
     )
-    
-    status = models.CharField(
-        max_length=20,
-        choices=BanStatus.choices,
-        default=BanStatus.PENDING,
-        help_text=_('Current status of the ban')
+    subject = models.ForeignKey(
+        "academic.Subject", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="bans",
     )
-    
-    issued_at = models.DateTimeField(auto_now_add=True)
-    starts_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text=_('When the ban takes effect')
+    reason = models.TextField()
+    duration = models.CharField(max_length=50, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    lifted_at = models.DateTimeField(null=True, blank=True)
+    lifted_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="bans_lifted",
     )
-    
-    expires_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text=_('When the ban expires (null for permanent)')
-    )
-    
-    scope = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text=_('Scope of the ban (e.g., which features are restricted)')
-    )
-    
+
     class Meta:
-        ordering = ['-issued_at']
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['user']),
-            models.Index(fields=['status']),
-            models.Index(fields=['-expires_at']),
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["is_active"]),
         ]
-    
+
     def __str__(self):
-        return f"{self.user.email} - {self.get_ban_type_display()}"
+        return f"Ban on {self.user} ({self.scope})"
+
+    @property
+    def is_expired(self):
+        return bool(self.expires_at and timezone.now() > self.expires_at)
 
 
 class Appeal(models.Model):
-    """
-    Appeals for bans or reports.
-    """
-    
-    class AppealStatus(models.TextChoices):
-        PENDING = 'pending', _('Pending Review')
-        UNDER_REVIEW = 'under_review', _('Under Review')
-        APPROVED = 'approved', _('Approved')
-        REJECTED = 'rejected', _('Rejected')
-    
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-    )
-    
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='appeals',
-        help_text=_('User appealing')
-    )
-    
-    ban = models.ForeignKey(
-        Ban,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='appeals',
-        help_text=_('Ban being appealed')
-    )
-    
-    report = models.ForeignKey(
-        Report,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='appeals',
-        help_text=_('Report being appealed')
-    )
-    
-    reason = models.TextField(
-        help_text=_('Reason for the appeal')
-    )
-    
-    evidence = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text=_('Evidence supporting the appeal')
-    )
-    
-    status = models.CharField(
-        max_length=20,
-        choices=AppealStatus.choices,
-        default=AppealStatus.PENDING,
-        help_text=_('Current status of the appeal')
-    )
-    
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    ban = models.ForeignKey(Ban, on_delete=models.CASCADE, related_name="appeals")
+    appellant = models.ForeignKey(User, on_delete=models.CASCADE, related_name="appeals")
+    reason = models.TextField()
+    supporting_evidence = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     reviewed_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='reviewed_appeals',
-        help_text=_('Moderator who reviewed the appeal')
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reviewed_appeals",
     )
-    
-    review_notes = models.TextField(
-        blank=True,
-        help_text=_('Notes from the review')
-    )
-    
+    review_note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
-    
+
     class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['user']),
-            models.Index(fields=['status']),
-        ]
-    
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["status"])]
+
     def __str__(self):
-        return f"Appeal {self.id[:8]} - {self.get_status_display()}"
+        return f"Appeal by {self.appellant} on ban #{self.ban_id}"

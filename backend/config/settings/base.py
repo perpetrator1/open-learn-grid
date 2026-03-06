@@ -14,6 +14,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Core Django Settings
 
 INSTALLED_APPS = [
+    # Daphne must come before staticfiles
+    'daphne',
     # Django apps
     'django.contrib.admin',
     'django.contrib.auth',
@@ -38,7 +40,21 @@ INSTALLED_APPS = [
     'moderation.apps.ModerationConfig',
     'notifications.apps.NotificationsConfig',
     'audit.apps.AuditConfig',
+    'dashboard',
+    # Django Channels
+    'channels',
 ]
+
+ASGI_APPLICATION = 'config.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [('redis', 6379)],
+        },
+    }
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -70,6 +86,8 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+
+# Daphne / Channels need ASGI to be listed before WSGI
 
 
 # Database Configuration
