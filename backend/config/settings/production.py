@@ -164,48 +164,77 @@ if REDIS_URL:
     }
 
 
-# Logging - Production
+# Logging - Production (JSON to stdout for Docker/k8s log aggregation)
 
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
+        'json': {
+            '()': 'django.utils.log.ServerFormatter',
+            'format': '[{levelname}] {asctime} {module} {message}',
+            'style': '{',
+        },
         'verbose': {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
         },
     },
     'handlers': {
-        'file': {
+        'console': {
             'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'django.log'),
-            'maxBytes': 1024 * 1024 * 15,  # 15MB
-            'backupCount': 10,
-            'formatter': 'verbose',
-        },
-        'audit_file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'audit.log'),
-            'maxBytes': 1024 * 1024 * 15,  # 15MB
-            'backupCount': 10,
+            'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
     },
+    'root': {
+        'handlers': ['console'],
+        'level': 'WARNING',
+    },
     'loggers': {
         'django': {
-            'handlers': ['file'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
         'audit': {
-            'handlers': ['audit_file'],
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'federation': {
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
     },
 }
 
-# Ensure logs directory exists
-os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
+
+# ── Sentry Error Tracking (optional) ────────────────────────────────────────
+
+SENTRY_DSN = config('SENTRY_DSN', default='')
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(transaction_style='url'),
+            CeleryIntegration(),
+            RedisIntegration(),
+        ],
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+        environment='production',
+        release=APP_VERSION,
+    )
+

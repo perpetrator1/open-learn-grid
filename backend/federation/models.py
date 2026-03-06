@@ -1,261 +1,171 @@
 """
-Models for the federation app.
+Federation models for Open Learn Grid.
 
-Handles instance registry and cross-instance communication.
+Handles instance registry, federated activities, federated materials, and instance blocks.
 """
 
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-import uuid
+from accounts.models import User
 
 
-class FederatedInstance(models.Model):
-    """
-    Registry of federated Open Learn Grid instances.
-    """
-    
-    class InstanceStatus(models.TextChoices):
-        ACTIVE = 'active', _('Active')
-        INACTIVE = 'inactive', _('Inactive')
-        SUSPENDED = 'suspended', _('Suspended')
-        PENDING = 'pending', _('Pending Verification')
-    
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-        help_text=_('Unique identifier for this instance')
+class Instance(models.Model):
+    """Registry entry for a federated Open Learn Grid instance."""
+
+    class TrustLevel(models.TextChoices):
+        TRUSTED = "trusted", _("Trusted")
+        NEUTRAL = "neutral", _("Neutral")
+        BLOCKED = "blocked", _("Blocked")
+
+    domain = models.CharField(max_length=255, unique=True, help_text="e.g. learngrid.university.edu")
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    logo = models.ImageField(upload_to="instance-logos/%Y/%m/", null=True, blank=True)
+    software_version = models.CharField(max_length=50, blank=True)
+    admin_email = models.EmailField(blank=True)
+    public_key = models.TextField(blank=True, help_text="RSA public key PEM")
+    keypair_created_at = models.DateTimeField(null=True, blank=True)
+    trust_level = models.CharField(
+        max_length=20, choices=TrustLevel.choices, default=TrustLevel.NEUTRAL,
     )
-    
-    instance_name = models.CharField(
-        max_length=255,
-        unique=True,
-        help_text=_('Name of the federated instance')
+    is_home = models.BooleanField(default=False)
+    registration_open = models.BooleanField(default=True)
+    requires_approval = models.BooleanField(default=False)
+    material_count = models.PositiveIntegerField(default=0)
+    user_count = models.PositiveIntegerField(default=0)
+    last_synced_stats_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    is_reachable = models.BooleanField(default=True)
+    added_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="added_instances",
     )
-    
-    domain = models.CharField(
-        max_length=255,
-        unique=True,
-        help_text=_('Domain name of the instance')
-    )
-    
-    api_url = models.URLField(
-        help_text=_('Base URL for the instance API')
-    )
-    
-    description = models.TextField(
-        blank=True,
-        help_text=_('Description of the instance')
-    )
-    
-    public_key = models.TextField(
-        help_text=_('Public key for verifying signatures')
-    )
-    
-    api_key = models.CharField(
-        max_length=255,
-        unique=True,
-        help_text=_('API key for authenticating requests')
-    )
-    
-    status = models.CharField(
-        max_length=20,
-        choices=InstanceStatus.choices,
-        default=InstanceStatus.PENDING,
-        help_text=_('Current status of the instance')
-    )
-    
-    is_trusted = models.BooleanField(
-        default=False,
-        help_text=_('Whether this instance is trusted')
-    )
-    
-    last_seen = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text=_('Last time this instance was contacted')
-    )
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
+    added_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-added_at"]
         indexes = [
-            models.Index(fields=['domain']),
-            models.Index(fields=['status']),
+            models.Index(fields=["domain"]),
+            models.Index(fields=["trust_level"]),
+            models.Index(fields=["is_home"]),
         ]
-    
+
     def __str__(self):
-        return self.instance_name
+        return f"{self.name} ({self.domain})"
+
+    def update_last_seen(self):
+        self.last_seen_at = timezone.now()
+        self.save(update_fields=["last_seen_at"])
 
 
-class FederationMessage(models.Model):
-    """
-    Messages exchanged between federated instances.
-    """
-    
-    class MessageType(models.TextChoices):
-        SYNC_REQUEST = 'sync_request', _('Synchronization Request')
-        SYNC_RESPONSE = 'sync_response', _('Synchronization Response')
-        QUERY = 'query', _('Query')
-        NOTIFICATION = 'notification', _('Notification')
-        ERROR = 'error', _('Error')
-    
-    class MessageStatus(models.TextChoices):
-        PENDING = 'pending', _('Pending')
-        SENT = 'sent', _('Sent')
-        DELIVERED = 'delivered', _('Delivered')
-        FAILED = 'failed', _('Failed')
-    
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
-    )
-    
+class FederatedActivity(models.Model):
+    """Records an activity received from or sent to another instance."""
+
+    class ActivityType(models.TextChoices):
+        MATERIAL_SHARED = "material_shared", _("Material Shared")
+        MATERIAL_UPDATED = "material_updated", _("Material Updated")
+        MATERIAL_REMOVED = "material_removed", _("Material Removed")
+        USER_REPORTED = "user_reported", _("User Reported")
+        INSTANCE_ANNOUNCEMENT = "instance_announcement", _("Instance Announcement")
+        INSTANCE_STATS_UPDATE = "instance_stats_update", _("Instance Stats Update")
+
+    class Status(models.TextChoices):
+        RECEIVED = "received", _("Received")
+        PROCESSING = "processing", _("Processing")
+        PROCESSED = "processed", _("Processed")
+        FAILED = "failed", _("Failed")
+
     from_instance = models.ForeignKey(
-        FederatedInstance,
-        on_delete=models.CASCADE,
-        related_name='sent_messages',
-        help_text=_('Source instance')
+        Instance, on_delete=models.CASCADE, related_name="sent_activities",
     )
-    
     to_instance = models.ForeignKey(
-        FederatedInstance,
-        on_delete=models.CASCADE,
-        related_name='received_messages',
-        help_text=_('Destination instance')
+        Instance, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="received_activities",
     )
-    
-    message_type = models.CharField(
-        max_length=50,
-        choices=MessageType.choices,
-        help_text=_('Type of message')
-    )
-    
-    subject = models.CharField(
-        max_length=255,
-        help_text=_('Message subject')
-    )
-    
-    payload = models.JSONField(
-        help_text=_('Message payload')
-    )
-    
-    status = models.CharField(
-        max_length=20,
-        choices=MessageStatus.choices,
-        default=MessageStatus.PENDING,
-        help_text=_('Current status of the message')
-    )
-    
-    signature = models.TextField(
-        blank=True,
-        help_text=_('Digital signature for verification')
-    )
-    
-    error_message = models.TextField(
-        blank=True,
-        help_text=_('Error details if delivery failed')
-    )
-    
-    retry_count = models.IntegerField(
-        default=0,
-        help_text=_('Number of delivery attempts')
-    )
-    
+    activity_id = models.CharField(max_length=255, unique=True)
+    activity_type = models.CharField(max_length=50, choices=ActivityType.choices)
+    payload = models.JSONField()
+    signature = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.RECEIVED)
+    error_message = models.TextField(blank=True)
+    retry_count = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
-    sent_at = models.DateTimeField(null=True, blank=True)
-    delivered_at = models.DateTimeField(null=True, blank=True)
-    
+    processed_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['from_instance']),
-            models.Index(fields=['to_instance']),
-            models.Index(fields=['status']),
+            models.Index(fields=["activity_type"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["from_instance"]),
+            models.Index(fields=["created_at"]),
         ]
-    
+
     def __str__(self):
-        return f"{self.get_message_type_display()} from {self.from_instance} to {self.to_instance}"
+        return f"{self.activity_type} from {self.from_instance.domain} [{self.status}]"
 
 
-class FederationSync(models.Model):
-    """
-    Synchronization records between federated instances.
-    """
-    
-    class SyncType(models.TextChoices):
-        FULL = 'full', _('Full Sync')
-        INCREMENTAL = 'incremental', _('Incremental Sync')
-        BILATERAL = 'bilateral', _('Bilateral Sync')
-    
-    class SyncStatus(models.TextChoices):
-        INITIATED = 'initiated', _('Initiated')
-        IN_PROGRESS = 'in_progress', _('In Progress')
-        COMPLETED = 'completed', _('Completed')
-        FAILED = 'failed', _('Failed')
-        PARTIAL = 'partial', _('Partial')
-    
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False,
+class FederatedMaterial(models.Model):
+    """Denormalized copy of a material from another instance."""
+
+    original_id = models.CharField(max_length=255)
+    source_instance = models.ForeignKey(
+        Instance, on_delete=models.CASCADE, related_name="federated_materials",
     )
-    
-    instance = models.ForeignKey(
-        FederatedInstance,
-        on_delete=models.CASCADE,
-        related_name='syncs',
-        help_text=_('Federated instance being synced')
-    )
-    
-    sync_type = models.CharField(
-        max_length=20,
-        choices=SyncType.choices,
-        default=SyncType.INCREMENTAL,
-        help_text=_('Type of synchronization')
-    )
-    
-    status = models.CharField(
-        max_length=20,
-        choices=SyncStatus.choices,
-        default=SyncStatus.INITIATED,
-        help_text=_('Synchronization status')
-    )
-    
-    records_synced = models.IntegerField(
-        default=0,
-        help_text=_('Number of records synchronized')
-    )
-    
-    errors_count = models.IntegerField(
-        default=0,
-        help_text=_('Number of errors during synchronization')
-    )
-    
-    data_synced = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text=_('Meta-information about synced data')
-    )
-    
-    error_log = models.JSONField(
-        default=list,
-        blank=True,
-        help_text=_('Log of errors during sync')
-    )
-    
-    started_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    
+    title = models.CharField(max_length=500)
+    description = models.TextField(blank=True)
+    material_type = models.CharField(max_length=100, blank=True)
+    subject_name = models.CharField(max_length=255, blank=True)
+    semester_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    department_name = models.CharField(max_length=255, blank=True)
+    file_url = models.URLField(max_length=2000)
+    external_url = models.URLField(max_length=2000, blank=True)
+    tags = models.JSONField(default=list, blank=True)
+    uploaded_by_username = models.CharField(max_length=150)
+    verified_by_username = models.CharField(max_length=150, blank=True)
+    verification_status = models.CharField(max_length=50, default="verified")
+    view_count = models.PositiveIntegerField(default=0)
+    download_count = models.PositiveIntegerField(default=0)
+    original_created_at = models.DateTimeField(null=True, blank=True)
+    synced_at = models.DateTimeField(auto_now_add=True)
+    last_updated_at = models.DateTimeField(auto_now=True)
+    is_removed = models.BooleanField(default=False)
+
     class Meta:
-        ordering = ['-started_at']
+        ordering = ["-synced_at"]
+        unique_together = [("original_id", "source_instance")]
         indexes = [
-            models.Index(fields=['instance']),
-            models.Index(fields=['status']),
+            models.Index(fields=["material_type"]),
+            models.Index(fields=["verification_status"]),
+            models.Index(fields=["source_instance", "is_removed"]),
         ]
-    
+
     def __str__(self):
-        return f"Sync {self.get_sync_type_display()} - {self.instance}"
+        return f"{self.title} [{self.source_instance.domain}]"
+
+
+class InstanceBlock(models.Model):
+    """Records manual or auto blocks of instances."""
+
+    class BlockType(models.TextChoices):
+        MANUAL = "manual", _("Manual")
+        AUTO_SPAM = "auto_spam_detection", _("Auto (Spam Detection)")
+        REPORTED = "reported", _("Reported")
+
+    instance = models.OneToOneField(
+        Instance, on_delete=models.CASCADE, related_name="block",
+    )
+    blocked_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="instance_blocks",
+    )
+    reason = models.TextField()
+    block_type = models.CharField(max_length=30, choices=BlockType.choices, default=BlockType.MANUAL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Block: {self.instance.domain} ({self.block_type})"

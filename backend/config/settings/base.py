@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     'dashboard',
     # Django Channels
     'channels',
+    # Celery Beat
+    'django_celery_beat',
 ]
 
 ASGI_APPLICATION = 'config.asgi.application'
@@ -291,3 +293,17 @@ LOGGING = {
 
 # Ensure logs directory exists
 os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Federation Settings
+# ---------------------------------------------------------------------------
+
+INSTANCE_DOMAIN = config('INSTANCE_DOMAIN', default='localhost:8000')
+INSTANCE_NAME = config('INSTANCE_NAME', default='Open Learn Grid')
+INSTANCE_PRIVATE_KEY = config('INSTANCE_PRIVATE_KEY', default='')
+
+# ---------------------------------------------------------------------------
+# Application Version
+# ---------------------------------------------------------------------------
+
+APP_VERSION = "1.0.0"

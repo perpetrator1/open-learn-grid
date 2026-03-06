@@ -17,3 +17,6 @@ channels[daphne]
 channels-redis
 daphne
 django-celery-beat
+cryptography
+python-dateutil
+requests
