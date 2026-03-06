@@ -63,6 +63,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ),
     'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
@@ -130,15 +131,22 @@ INSTALLED_APPS += [
 ]
 
 
-# JWT Settings for Development
-# Extended expiry times for easier testing
+# JWT Settings
+# Access: 15 min, Refresh: 7 days, blacklisting enabled
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+
+# Celery for local dev (Redis must be running)
+
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://localhost:6379/0')

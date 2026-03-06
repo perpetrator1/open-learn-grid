@@ -25,6 +25,9 @@ INSTALLED_APPS = [
     # Third-party apps
     'corsheaders',
     'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+    'django_filters',
     'storages',
     
     # Open Learn Grid apps
@@ -165,19 +168,34 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,
-    'UPDATE_LAST_LOGIN': False,
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
-    'SIGNING_KEY': None,  # Overridden in local.py and production.py
+    'SIGNING_KEY': None,  # Overridden per environment
     'VERIFYING_KEY': None,
     'AUDIENCE': None,
     'ISSUER': None,
     'JTI_CLAIM': 'jti',
     'TOKEN_TYPE_CLAIM': 'token_type',
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
 }
+
+
+# Celery Configuration
+# https://docs.celeryq.dev/en/stable/userguide/configuration.html
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 
 # Default Primary Key Field Type
