@@ -355,3 +355,167 @@ export interface MaterialFilters {
   ordering?: string;
   page?: number;
 }
+
+// ============================================================
+// Moderation
+// ============================================================
+
+export type ReportItemType = "material" | "user" | "instance";
+export type ReportReason =
+  | "inappropriate_content"
+  | "copyright_violation"
+  | "spam"
+  | "harassment"
+  | "incorrect_info"
+  | "other";
+export type ReportStatus = "open" | "under_review" | "resolved" | "dismissed";
+export type BanScope = "instance_wide" | "department_level" | "subject_level";
+export type AppealStatus = "pending" | "approved" | "rejected";
+
+export interface Report {
+  id: number;
+  reporter: UserPublic | null;
+  reported_item_type: ReportItemType;
+  material: number | null;
+  reported_user: number | null;
+  reason: ReportReason;
+  description: string;
+  evidence_urls: string[];
+  context: string;
+  status: ReportStatus;
+  assigned_to: UserPublic | null;
+  action_taken: string;
+  resolved_by: UserPublic | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Ban {
+  id: number;
+  user: UserPublic;
+  banned_by: UserPublic | null;
+  scope: BanScope;
+  department: number | null;
+  subject: number | null;
+  reason: string;
+  duration: string;
+  expires_at: string | null;
+  is_active: boolean;
+  is_expired: boolean;
+  created_at: string;
+  lifted_at: string | null;
+  lifted_by: UserPublic | null;
+}
+
+export interface Appeal {
+  id: number;
+  ban: number;
+  appellant: UserPublic;
+  reason: string;
+  supporting_evidence: string;
+  status: AppealStatus;
+  reviewed_by: UserPublic | null;
+  review_note: string;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+// ============================================================
+// Notifications
+// ============================================================
+
+export type NotificationType =
+  | "role_assigned"
+  | "role_removed"
+  | "material_verified"
+  | "material_rejected"
+  | "material_request_approved"
+  | "material_request_rejected"
+  | "academic_request_approved"
+  | "academic_request_rejected"
+  | "report_filed"
+  | "report_resolved"
+  | "ban_issued"
+  | "ban_lifted"
+  | "new_material_in_subject"
+  | "mention"
+  | "system_announcement";
+
+export interface Notification {
+  id: number;
+  recipient: number;
+  notification_type: NotificationType;
+  title: string;
+  body: string;
+  icon: string;
+  link: string;
+  related_object_type: string;
+  related_object_id: number | null;
+  is_read: boolean;
+  is_dismissed: boolean;
+  created_at: string;
+  read_at: string | null;
+}
+
+export interface NotificationPreference {
+  id: number;
+  notification_type: NotificationType;
+  notification_type_display: string;
+  email_enabled: boolean;
+  in_app_enabled: boolean;
+  push_enabled: boolean;
+}
+
+// ============================================================
+// Audit
+// ============================================================
+
+export interface AuditLog {
+  id: number;
+  actor: UserPublic | null;
+  action: string;
+  target_type: string;
+  target_id: number | null;
+  target_repr: string;
+  changes: Record<string, unknown>;
+  metadata: { ip?: string; user_agent?: string; [key: string]: unknown };
+  instance: string;
+  created_at: string;
+}
+
+// ============================================================
+// Dashboard
+// ============================================================
+
+export interface DashboardStats {
+  total_materials: number;
+  pending_verification: number;
+  verified_materials: number;
+  total_users: number;
+  active_reports: number;
+  total_subjects: number;
+  my_materials?: number;
+  my_pending?: number;
+  my_verified?: number;
+}
+
+export interface ActivityItem {
+  id: string;
+  type: string;
+  message: string;
+  timestamp: string;
+  actor?: UserPublic;
+  link?: string;
+}
+
+export interface ChartDataPoint {
+  date: string;
+  count: number;
+  label?: string;
+}
+
+export interface DashboardActivity {
+  results: ActivityItem[];
+  count: number;
+}
