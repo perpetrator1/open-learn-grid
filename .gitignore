@@ -27,11 +27,10 @@ MANIFEST
 venv/
 ENV/
 env/
-.venv
+.venv/
 .ENV
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -44,22 +43,35 @@ env/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
-/media
-/static
-/staticfiles
+media/
+staticfiles/
+/backend/media/
+/backend/staticfiles/
+/backend/logs/
 .env
 .env.local
 .env.*.local
+
+# Django migrations (keep __init__.py, commit actual migration files)
+# Uncomment below only if you prefer gitignoring migrations:
+# backend/**/migrations/*.py
+# !backend/**/migrations/__init__.py
 
 # Testing
 .coverage
 .pytest_cache/
 htmlcov/
+.tox/
 
-# Node (for frontend)
+# Node
 node_modules/
-npm-debug.log
-yarn-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite / build output
+frontend/dist/
+frontend/.vite/
 
 # OS
 .DS_Store
@@ -69,10 +81,7 @@ Thumbs.db
 *.bak
 *.orig
 .vagrant/
-*.swp
-*.swo
-*~
 
 # Docker
 .docker/
-*.dockerfile
+

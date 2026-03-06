@@ -1,9 +1,15 @@
 Django==5.0.*
 djangorestframework
-djangorestframework-simplejwt
+djangorestframework-simplejwt[crypto]
 django-cors-headers
 django-storages[s3]
+django-filter
 python-decouple
 psycopg[binary]
 boto3
 Pillow
+celery[redis]
+redis
+pyotp
+qrcode[pil]
+gunicorn
